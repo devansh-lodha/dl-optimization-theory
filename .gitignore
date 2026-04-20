@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# uv / Virtual Environment
+.venv/
+uv.lock
+
+# LaTeX (Junk files generated during compilation)
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.toc
+*.synctex.gz
+*.bbl
+*.blg
+*.pdf
+# Note: Remove *.pdf above if you WANT to track the generated plots in Git.
+# In a professional scribe, we usually track the script, not the binary PDF.
+
+# OS-specific
+.DS_Store
+Thumbs.db
