@@ -1,0 +1,47 @@
+\section{Optimal Parameters and Theoretical Bounds}
+\label{sec:bounds}
+
+\subsection{Nesterov Accelerated Gradient (NAG)}
+Standard Polyak momentum computes the gradient at the current position $w^{(t)}$ and then takes a step combining this gradient with the historical velocity. Nesterov Accelerated Gradient (NAG) \cite{nesterov1983method} improves upon this using a "lookahead" principle. 
+
+Since we know the momentum term will shift the parameters by $\beta z^{(t)}$, NAG evaluates the gradient at this anticipated future position. The standard formulation is:
+\begin{align}
+    z^{(t+1)} &= \beta z^{(t)} + \nabla f(w^{(t)} - \alpha \beta z^{(t)}) \\
+    w^{(t+1)} &= w^{(t)} - \alpha z^{(t+1)}
+\end{align}
+By measuring the gradient at the lookahead position, NAG effectively anticipates whether the momentum vector will overshoot the minimum, allowing the gradient to apply a corrective force \textit{before} the overshoot fully occurs. In phase space, this actively dampens the high-frequency oscillations seen in Polyak momentum, yielding strictly superior convergence constants.
+
+\subsection{The Quadratic Speedup}
+In Section \ref{sec:momentum}, we established that in the oscillatory regime ($\Delta < 0$), the convergence rate of momentum depends exclusively on $\beta$. To optimize the global convergence rate, we must find the optimal hyperparameters $\alpha^*$ and $\beta^*$ that force the minimum and maximum eigenvalues to converge at the exact same rate in the critically damped regime. 
+
+Solving for these bounds mathematically yields the optimal parameters for strongly convex quadratics:
+\begin{equation}
+    \alpha^* = \frac{4}{(\sqrt{\lambda_{max}} + \sqrt{\lambda_{min}})^2}, \quad \beta^* = \left( \frac{\sqrt{\kappa} - 1}{\sqrt{\kappa} + 1} \right)^2
+\end{equation}
+Substituting $\beta^*$ into the spectral radius $\sqrt{\beta}$ gives the optimal convergence rate of Momentum:
+\begin{equation}
+    \text{Momentum Optimal Rate} = \frac{\sqrt{\kappa} - 1}{\sqrt{\kappa} + 1}
+\end{equation}
+
+Recall that the optimal rate for standard Gradient Descent is $\frac{\kappa - 1}{\kappa + 1}$. 
+The transition from $\kappa$ to $\sqrt{\kappa}$ is a monumental achievement. If a loss surface has a condition number of $\kappa = 10,000$, standard Gradient Descent requires scaling its iterations by $10,000$ to reach a given tolerance. Momentum requires scaling by only $\sqrt{10,000} = 100$. This is the \textbf{quadratic speedup}.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.7\textwidth]{floats/momentum_speedup.pdf}
+    \caption{Convergence of Gradient Descent vs. Momentum and NAG on an ill-conditioned quadratic ($\kappa=100$). The theoretical quadratic speedup is empirically visible; Momentum drops the error to $10^{-5}$ exponentially faster than GD, with NAG providing additional dampening.}
+    \label{fig:momentum_speedup}
+\end{figure}
+
+\subsection{Nesterov's Lower Bound}
+Is it possible to invent a first-order optimization algorithm that achieves a cubic speedup ($\sqrt[3]{\kappa}$)? 
+
+Yurii Nesterov proved \cite{nesterov2003introductory} that it is strictly impossible. For any linear first-order method (an algorithm where the update is restricted to the span of the historical gradients), there exists an adversarial convex function (such as the Convex Rosenbrock or a highly connected path graph) where the algorithm cannot converge faster than:
+\begin{equation}
+    f(w^{(t)}) - f(w^*) \geq \Omega\left(\frac{1}{t^2}\right) \quad \text{(for smooth convex functions)}
+\end{equation}
+\begin{equation}
+    \|w^{(t)} - w^*\| \geq \Omega\left( \left( \frac{\sqrt{\kappa}-1}{\sqrt{\kappa}+1} \right)^t \right) \quad \text{(for strongly convex functions)}
+\end{equation}
+
+Because NAG achieves this exact bound, it is termed \textit{theoretically optimal} for first-order convex optimization. To bypass this lower bound, we must abandon the premise of relying strictly on historical gradients and fundamentally alter the geometry of the space. This is achieved via preconditioning (Adaptive Matrices) or computing the exact curvature (Second-Order Methods).

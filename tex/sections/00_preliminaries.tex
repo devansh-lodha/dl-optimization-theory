@@ -1,0 +1,38 @@
+\section{Mathematical Preliminaries}
+\label{sec:preliminaries}
+
+Optimization in deep learning relies fundamentally on local approximations of the objective function. Let $f: \R^d \to \R$ be a twice-differentiable scalar objective function parameterized by $w \in \R^d$.
+
+\subsection{Taylor Expansion and Critical Points}
+To understand the local geometry of $f$ around a point $w$, we use the second-order Taylor expansion:
+\begin{equation}
+f(w + \Delta w) \approx f(w) + \nabla f(w)^T \Delta w + \frac{1}{2} \Delta w^T \nabla^2 f(w) \Delta w
+\end{equation}
+where $\nabla f(w) \in \R^d$ is the gradient vector and $H = \nabla^2 f(w) \in \R^{d \times d}$ is the Hessian matrix.
+
+The gradient $\nabla f(w)$ points in the direction of steepest ascent. First-order optimization methods move parameters in the opposite direction, $-\nabla f(w)$. A point $w^*$ is a stationary point if $\nabla f(w^*) = 0$. The nature of a stationary point is determined by the eigenvalues of the symmetric Hessian matrix $H$:
+\begin{itemize}
+    \item \textbf{Local Minimum:} $H \succ 0$ (Positive Definite). All eigenvalues are strictly positive.
+    \item \textbf{Local Maximum:} $H \prec 0$ (Negative Definite). All eigenvalues are strictly negative.
+    \item \textbf{Saddle Point:} $H$ is indefinite. Eigenvalues have mixed signs, indicating the function curves upwards in some dimensions and downwards in others.
+\end{itemize}
+
+\subsection{Convexity and Pathological Curvature}
+A function $f$ is strictly convex if $H \succ 0$ for all $w \in \R^d$. In strictly convex functions, any local minimum is guaranteed to be the global minimum. 
+
+The efficiency of gradient-based methods is heavily dependent on the condition number of the Hessian, denoted as $\kappa$:
+\begin{equation}
+\kappa = \frac{\lambda_{max}}{\lambda_{min}}
+\end{equation}
+where $\lambda_{max}$ and $\lambda_{min}$ are the largest and smallest eigenvalues of $H$. The condition number measures the disparity in curvature along different principal directions. A ratio of $\kappa = 1$ is ideal.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.65\textwidth]{floats/pathological_curvature.pdf}
+    \caption{Gradient Descent on a high condition number objective ($\kappa = 10$). The trajectory oscillates across the high-curvature axis while making minimal progress toward the global minimum.}
+    \label{fig:pathological_curvature}
+\end{figure}
+
+When $\kappa \gg 1$, the function exhibits pathological curvature (Figure \ref{fig:pathological_curvature}). The geometry resembles a steep ravine. Because the gradient is always orthogonal to the contour lines, the steepest descent direction points predominantly across the ravine rather than along the floor toward the minimum. Consequently, updating parameters using $-\nabla f(w)$ results in an inefficient zigzagging trajectory, slowing down convergence significantly.
+
+The primary objective of advanced optimization algorithms is to mitigate the effects of high condition numbers and saddle points.

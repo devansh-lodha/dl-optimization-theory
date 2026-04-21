@@ -1,0 +1,95 @@
+\section{First-Order Methods and Their Exact Dynamics}
+\label{sec:first_order}
+
+First-order optimization methods rely exclusively on the gradient of the objective function. To understand their fundamental limits, we must analyze how they propagate errors in closed form.
+
+\subsection{Data Modalities: Batch, Stochastic, and Mini-batch}
+Before analyzing the dynamics, we establish the computational variants of Gradient Descent (GD) based on the data sampling strategy:
+\begin{itemize}
+    \item \textbf{Batch Gradient Descent:} Computes the exact gradient $\nabla f(w)$ over the entire dataset of size $N$. It guarantees deterministic descent for sufficiently small step sizes but requires $O(N)$ computation per step, making it intractable for large datasets.
+    \item \textbf{Stochastic Gradient Descent (SGD):} Approximates the gradient using a single data point. The stochastic gradient $g_t$ is an unbiased estimator: $\E[g_t] = \nabla f(w)$. However, the variance $Var(g_t)$ acts as noise, causing severe fluctuations in the trajectory.
+    \item \textbf{Mini-batch SGD:} Computes the gradient over a batch of size $B \ll N$. By the Central Limit Theorem, the variance of the gradient estimator is reduced by a factor of $1/B$. It balances computational efficiency via vectorized matrix operations with manageable stochastic variance.
+\end{itemize}
+
+\subsection{Gradient Descent in Closed Form}
+To strictly analyze the trajectory of GD, we observe its behavior on a strictly convex quadratic objective:
+\begin{equation}
+f(w) = \frac{1}{2} w^T A w - b^T w
+\end{equation}
+where $A \in \R^{d \times d}$ is symmetric positive definite ($A \succ 0$). Setting $\nabla f(w) = A w - b = 0$ yields the unique global minimum $w^* = A^{-1}b$.
+
+The GD update rule with step size $\alpha$ is:
+\begin{equation}
+w^{(t+1)} = w^{(t)} - \alpha (A w^{(t)} - b)
+\end{equation}
+We define the error vector as $e^{(t)} = w^{(t)} - w^*$. Subtracting $w^*$ from both sides and substituting $b = A w^*$, we obtain the error dynamics:
+\begin{equation}
+e^{(t+1)} = (I - \alpha A) e^{(t)}
+\end{equation}
+
+Because $A$ is symmetric, it admits an eigendecomposition $A = Q \Lambda Q^T$, where $Q$ is orthogonal and $\Lambda = \text{diag}(\lambda_1, \dots, \lambda_d)$. We project the error into the eigenvector basis by defining $x^{(t)} = Q^T e^{(t)}$:
+\begin{equation}
+x^{(t+1)} = (I - \alpha \Lambda) x^{(t)}
+\end{equation}
+Because $\Lambda$ is diagonal, the $d$-dimensional coupled optimization problem completely disintegrates into $d$ independent 1D optimization problems. The error along the $i$-th eigenvector decays as:
+\begin{equation} \label{eq:spectral_decay}
+x_i^{(t)} = (1 - \alpha \lambda_i)^t x_i^{(0)}
+\end{equation}
+
+\subsection{Spectral Decay and The Optimal Step Size}
+Equation \ref{eq:spectral_decay} states that the error along the $i$-th eigenvector shrinks geometrically by a factor of $|1 - \alpha \lambda_i|$. For the algorithm to converge, the error in every dimension must decay, demanding:
+\begin{equation}
+|1 - \alpha \lambda_i| < 1 \quad \forall i \implies 0 < \alpha < \frac{2}{\lambda_{max}}
+\end{equation}
+The global convergence rate is bottlenecked strictly by the dimension that converges the slowest:
+\begin{equation}
+\text{rate}(\alpha) = \max_i |1 - \alpha \lambda_i| = \max \left( |1 - \alpha \lambda_{min}|, \, |1 - \alpha \lambda_{max}| \right)
+\end{equation}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.7\textwidth]{floats/spectral_decay.pdf}
+    \caption{Error magnitude $|x_i^{(t)}|$ across iterations for different eigenvectors using the optimal step size. Intermediate eigenvalues converge rapidly, while the minimum and maximum eigenvalues perfectly bottleneck the global convergence rate.}
+    \label{fig:spectral_decay}
+\end{figure}
+
+To minimize this bottleneck, we find the optimal step size $\alpha^*$ that equalizes the decay rates of the two extreme eigenvectors:
+\begin{equation}
+1 - \alpha^* \lambda_{min} = -(1 - \alpha^* \lambda_{max}) \implies \alpha^* = \frac{2}{\lambda_{max} + \lambda_{min}}
+\end{equation}
+Substituting $\alpha^*$ back into the rate yields the strict theoretical limit for Gradient Descent:
+\begin{equation}
+\text{Optimal Rate} = \frac{\lambda_{max} - \lambda_{min}}{\lambda_{max} + \lambda_{min}} = \frac{\kappa - 1}{\kappa + 1}
+\end{equation}
+As $\kappa \to \infty$, the rate approaches $1$, meaning convergence grinds to an absolute halt. First-order methods cannot surpass this bound without historical memory (momentum) or preconditioning.
+
+\subsection{Stochastic Dynamics and the Noise Ball}
+In deep learning, calculating the exact deterministic gradient over $N$ samples is intractable. We instead use Stochastic Gradient Descent (SGD), which approximates the gradient using a single sample (or a mini-batch). The stochastic gradient $g_t$ is an unbiased estimator ($\E[g_t] = \nabla f(w)$), but it introduces noise. We model this as $g_t = \nabla f(w) + \xi_t$, where $\xi_t$ is zero-mean noise with covariance $\Sigma$.
+
+The update rule becomes:
+\begin{equation}
+w^{(t+1)} = w^{(t)} - \alpha (\nabla f(w^{(t)}) + \xi_t)
+\end{equation}
+
+This injected variance fundamentally alters the convergence guarantees. For a strongly convex function, a constant learning rate $\alpha$ does \textit{not} converge to the global minimum. Instead, the parameters reach a stationary distribution—a "noise ball" orbiting the minimum. The expected squared distance to the optimum converges to a strict theoretical floor proportional to the learning rate and the trace of the noise covariance:
+\begin{equation}
+\lim_{t \to \infty} \E[\|w^{(t)} - w^*\|^2] \propto \alpha \text{Tr}(\Sigma)
+\end{equation}
+
+To force the system to collapse into the exact minimum, the variance of the noise ball must be driven to zero. This requires decaying the learning rate over time. Mathematically, convergence is guaranteed if and only if the step size schedule $\alpha_t$ satisfies the \textbf{Robbins-Monro conditions} \cite{robbins1951stochastic}:
+\begin{equation}
+\sum_{t=1}^\infty \alpha_t = \infty \quad \text{and} \quad \sum_{t=1}^\infty \alpha_t^2 < \infty
+\end{equation}
+The first condition ensures the optimizer can travel infinitely far to reach the minimum from any initialization. The second condition ensures the injected variance summates to a finite value, forcing the noise ball to shrink to zero (Figure \ref{fig:sgd_noise}). Standard schedules like $\alpha_t = \frac{\alpha_0}{1 + \eta t}$ precisely satisfy these criteria.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{floats/sgd_noise.pdf}
+    \caption{(a) Stochastic trajectories on an isotropic quadratic. A constant learning rate causes the parameters to randomly orbit the minimum. A decaying learning rate collapses the orbit. (b) The expected squared error. Constant $\alpha$ hits a hard theoretical variance floor, while decaying $\alpha$ drives the error steadily toward zero.}
+    \label{fig:sgd_noise}
+\end{figure}
+
+\subsection{Mini-batching and The Linear Scaling Rule}
+To reduce variance without sacrificing the computational efficiency of parallel matrix operations, we use Mini-batch SGD. By averaging the gradient over $B$ samples, the covariance of the noise is strictly reduced by a factor of $1/B$: $\text{Var}(g_t) = \frac{1}{B}\Sigma$.
+
+A critical consequence of this variance reduction is the \textbf{Linear Scaling Rule} \cite{goyal2017accurate}. If we increase the batch size by a factor of $k$ (from $B$ to $kB$), the variance of the gradient estimator drops by $k$. To maintain the same level of stochastic noise in the parameter update steps (which acts as an implicit regularizer and helps escape sharp local minima), we must linearly scale the learning rate by $k$: $\alpha \to k\alpha$. This rule holds until $B$ becomes so large that the stochastic noise is entirely eradicated, at which point the maximum stable learning rate boundary ($\frac{2}{\lambda_{max}}$) becomes the limiting constraint.

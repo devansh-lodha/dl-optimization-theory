@@ -1,0 +1,51 @@
+\documentclass[12pt]{article}
+\usepackage[english]{babel}
+\usepackage[utf8x]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{scribe}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage[colorlinks=true, linkcolor=blue, urlcolor=blue, citecolor=blue]{hyperref} % Added for GitHub link
+
+\Lecturer{Prof. Anirban Dasgupta}
+\TAs{Shrutimoy Das, Shivam Kumar, Prathamesh Shanbhag, Balkrishna Sehra}
+\LectureDate{January 27, 2026}
+\LectureTitle{Optimization Methods in Deep Learning: Part - 2}
+
+\begin{document}
+    \MakeScribeTop
+
+    \begin{center}
+    \textbf{Scribe Contributions} \\
+    \vspace{2mm}
+    \begin{tabular}{|l|l|>{\raggedright\arraybackslash}p{8.5cm}|}
+    \hline
+    \textbf{Name} & \textbf{Roll No.} & \textbf{Contribution} \\ \hline
+    Devansh Lodha            & 23110091          & Project Setup, Geometry, Adaptive Matrices.  \\
+    Nupoor Assudani          & 23110224          & Momentum Physics, Adam, Bias Correction. \\
+    Isha Dave                & 25210059          & Quasi-Newton Methods, BFGS, L-BFGS. \\
+    \hline
+    \end{tabular}
+    \end{center}
+    
+    \vspace{2mm}
+    \begin{center}
+        \small \textit{Codebase and high-resolution visualizations for these notes are available at:} \\
+        \url{https://github.com/devansh-lodha/dl-optimization-theory}
+    \end{center}
+
+    % Insert modularized sections
+    \input{sections/00_preliminaries.tex}
+    \input{sections/01_first_order_limits.tex}
+    \input{sections/02_momentum_physics.tex}
+    \input{sections/03_nesterov_and_bounds.tex}
+    \input{sections/04_adaptive_matrices.tex}
+    \input{sections/05_adam_and_bias.tex}
+    \input{sections/06_newton_and_secant.tex}
+    \input{sections/07_limited_memory_bfgs.tex}
+
+    % Bibliography
+    \bibliographystyle{abbrv}
+    \bibliography{references}
+
+\end{document}

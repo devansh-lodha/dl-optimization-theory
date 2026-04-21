@@ -1,0 +1,66 @@
+\section{Second-Order Optimization and Quasi-Newton Methods}
+\label{sec:newton}
+
+First-order methods scale the gradient using historical heuristics. Second-order methods explicitly compute the local curvature of the loss surface to calculate the optimal step, effectively warping the space so that all directions have equal curvature.
+
+\subsection{Newton's Method and Line Search}
+Recall the second-order Taylor expansion of the objective function around a point $w^{(t)}$:
+\begin{equation}
+    f(w^{(t)} + \Delta w) \approx f(w^{(t)}) + \nabla f(w^{(t)})^T \Delta w + \frac{1}{2} \Delta w^T H_t \Delta w
+\end{equation}
+where $H_t = \nabla^2 f(w^{(t)})$ is the Hessian matrix. To find the step $\Delta w$ that minimizes this local quadratic approximation, we take the derivative with respect to $\Delta w$ and set it to zero:
+\begin{equation}
+    \nabla f(w^{(t)}) + H_t \Delta w = 0 \implies \Delta w = -H_t^{-1} \nabla f(w^{(t)})
+\end{equation}
+This gives the update rule for Newton's Method:
+\begin{equation}
+    w^{(t+1)} = w^{(t)} - \alpha \left( H_t^{-1} \nabla f(w^{(t)}) \right)
+\end{equation}
+
+Multiplying the gradient by the inverse Hessian $H_t^{-1}$ rectifies the geometry of the space, rotating the gradient vector to point directly at the minimum of the local quadratic approximation. 
+
+\textbf{The Necessity of Line Search:} Notice we have introduced a step size scalar $\alpha$. While pure Newton's Method assumes $\alpha=1.0$, on highly non-quadratic functions (like the Rosenbrock function in Figure \ref{fig:newton_bfgs}), a full step of $\alpha=1.0$ will wildly overshoot the minimum or even diverge. Second-order methods calculate the optimal \textit{direction}, but we must mathematically employ a \textbf{Line Search} (e.g., the Armijo Backtracking rule) to dynamically shrink $\alpha$ until a sufficient decrease in the loss is guaranteed.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.7\textwidth]{floats/newton_bfgs.pdf}
+    \caption{Trajectories on the Rosenbrock function with Armijo Line Search. Gradient Descent crawls slowly along the valley floor. Newton's Method explicitly computes the inverse Hessian, leaping to the minimum in a handful of scaled steps. BFGS begins behaving like Gradient Descent (using an identity matrix) but dynamically "learns" the Hessian from gradient differences, successfully mirroring Newton's Method as it curves into the minimum.}
+    \label{fig:newton_bfgs}
+\end{figure}
+
+\subsection{The Computational Intractability of the Hessian}
+Despite its geometric perfection, Newton's Method is effectively useless in modern deep learning. For a neural network with $N$ parameters, the Hessian $H_t$ is an $N \times N$ matrix. 
+\begin{itemize}
+    \item \textbf{Memory:} Storing $H_t$ requires $O(N^2)$ memory. For a 1-billion parameter model, this requires millions of gigabytes of VRAM.
+    \item \textbf{Compute:} Inverting $H_t$ to compute $H_t^{-1}$ requires $O(N^3)$ operations, rendering the update step computationally intractable.
+\end{itemize}
+
+\subsection{Quasi-Newton Methods and the Secant Condition}
+Quasi-Newton methods achieve the accelerated convergence of Newton's Method without computing or inverting the true Hessian. Instead, they maintain an approximation of the inverse Hessian, $B_t \approx H_t^{-1}$, and update it iteratively using only first-order gradient information.
+
+To build a valid approximation, $B_t$ must capture the underlying curvature. We define the parameter step and the gradient difference as:
+\begin{align}
+    s_t &= w^{(t+1)} - w^{(t)} \\
+    y_t &= \nabla f(w^{(t+1)}) - \nabla f(w^{(t)})
+\end{align}
+
+If $f$ were strictly quadratic ($f(w) = \frac{1}{2}w^T H w$), the gradient difference between two steps would exactly equal the Hessian multiplied by the position difference: $y_t = H s_t$. Multiplying both sides by $H^{-1}$ yields $s_t = H^{-1} y_t$. 
+
+For general non-quadratic functions, we demand that our inverse Hessian approximation $B_{t+1}$ satisfies this exact property for the most recent step. This is known as the \textbf{Secant Condition}:
+\begin{equation}
+    B_{t+1} y_t = s_t
+\end{equation}
+
+\subsection{The BFGS Update Rule}
+The secant condition does not uniquely determine $B_{t+1}$. The BFGS (Broyden-Fletcher-Goldfarb-Shanno) algorithm \cite{nocedal2006numerical} formulates this as a constrained optimization problem. We seek the matrix $B_{t+1}$ that satisfies the secant condition, remains symmetric, and minimizes the weighted Frobenius norm distance to the previous approximation $B_t$:
+\begin{align*}
+    \min_{B_{t+1}} \quad & \| B_{t+1} - B_t \|_W \\
+    \text{subject to} \quad & B_{t+1} y_t = s_t \quad \text{and} \quad B_{t+1} = B_{t+1}^T
+\end{align*}
+
+Solving this optimization yields the exact BFGS rank-two update rule:
+\begin{equation}
+    B_{t+1} = \left( I - \frac{s_t y_t^T}{y_t^T s_t} \right) B_t \left( I - \frac{y_t s_t^T}{y_t^T s_t} \right) + \frac{s_t s_t^T}{y_t^T s_t}
+\end{equation}
+
+\textbf{The Curvature Condition:} Notice the denominator $y_t^T s_t$. For $B_{t+1}$ to remain positive definite (which guarantees $B_{t+1} \nabla f$ is a descent direction), we strictly require the curvature condition $y_t^T s_t > 0$. This mathematically reinforces why BFGS \textit{must} be paired with a proper Line Search; a fixed step size will eventually violate this condition, causing the matrix to become indefinite and the optimizer to violently diverge.

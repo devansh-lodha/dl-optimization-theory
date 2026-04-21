@@ -1,0 +1,62 @@
+\section{The Physics and Mathematics of Momentum}
+\label{sec:momentum}
+
+Standard gradient descent lacks memory. The introduction of Polyak Heavy Ball (Momentum) \cite{polyak1964some} mitigates the bottleneck of pathological curvature by accumulating historical gradients. We will analyze momentum rigorously as a discrete-time dynamical system.
+
+\subsection{State-Space Formulation}
+The momentum update rules introduce an auxiliary sequence $z^{(t)}$, acting as a velocity accumulator. For step size $\alpha$ and momentum parameter $\beta \in[0, 1)$, the updates are:
+\begin{align}
+    z^{(t+1)} &= \beta z^{(t)} + \nabla f(w^{(t)}) \\
+    w^{(t+1)} &= w^{(t)} - \alpha z^{(t+1)}
+\end{align}
+
+Assuming the same convex quadratic $f(w) = \frac{1}{2} w^T A w$, we shift the parameters such that the minimum is at the origin ($w^* = 0$). We project the iterates into the eigenvector basis of $A$: $x^{(t)} = Q^T w^{(t)}$ and $y^{(t)} = Q^T z^{(t)}$. The coupled multidimensional system cleanly decomposes into $d$ independent $2 \times 2$ systems. For the $i$-th eigenvector with eigenvalue $\lambda_i$:
+\begin{align}
+    y_i^{(t+1)} &= \beta y_i^{(t)} + \lambda_i x_i^{(t)} \\
+    x_i^{(t+1)} &= x_i^{(t)} - \alpha y_i^{(t+1)} = -\alpha \beta y_i^{(t)} + (1 - \alpha \lambda_i) x_i^{(t)}
+\end{align}
+
+This constitutes a linear dynamical system, which we write in matrix form:
+\begin{equation}
+    \begin{pmatrix} y_i^{(t+1)} \\ x_i^{(t+1)} \end{pmatrix} 
+    = 
+    \underbrace{
+    \begin{pmatrix} \beta & \lambda_i \\ -\alpha\beta & 1 - \alpha\lambda_i \end{pmatrix}
+    }_{R}
+    \begin{pmatrix} y_i^{(t)} \\ x_i^{(t)} \end{pmatrix}
+\end{equation}
+
+\subsection{Characteristic Polynomial and Damping Regimes}
+The convergence of this system is governed exclusively by the eigenvalues of the iteration matrix $R$. To find them, we compute the roots of the characteristic polynomial, $\sigma^2 - \text{tr}(R)\sigma + \det(R) = 0$:
+\begin{equation}
+    \sigma^2 - (1 + \beta - \alpha \lambda_i)\sigma + \beta = 0
+\end{equation}
+The roots are given by the quadratic formula:
+\begin{equation}
+    \sigma = \frac{(1 + \beta - \alpha \lambda_i) \pm \sqrt{\Delta}}{2}, \quad \text{where} \quad \Delta = (1 + \beta - \alpha \lambda_i)^2 - 4\beta
+\end{equation}
+The behavior of the trajectory depends strictly on the sign of the discriminant $\Delta$. Because this is analogous to a discrete damped harmonic oscillator, we classify the dynamics into three physical regimes:
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{floats/momentum_phase.pdf}
+    \caption{Phase space diagrams (Position vs. Velocity) for a single coordinate under different momentum configurations. The underdamped regime spirals into equilibrium, effectively trading monotonic descent for a superior asymptotic convergence rate.}
+    \label{fig:momentum_phase}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{Overdamped ($\Delta > 0$):} The roots are real and distinct. The system acts much like standard gradient descent, decaying monotonically without crossing the origin. This occurs when $\beta$ is too small (e.g., $\beta \approx 0$).
+    \item \textbf{Critically Damped ($\Delta = 0$):} The roots are real and repeated. This represents the fastest possible convergence to equilibrium without oscillation. Solving $\Delta = 0$ yields the critical momentum $\beta = (1 - \sqrt{\alpha \lambda_i})^2$.
+    \item \textbf{Underdamped ($\Delta < 0$):} The roots are complex conjugates. The trajectory spirals into the equilibrium, creating the oscillations characteristic of momentum in deep learning. 
+\end{itemize}
+
+\subsection{The Convergence Rate of Complex Roots}
+A profound mathematical consequence emerges in the underdamped regime. When $\Delta < 0$, the roots $\sigma$ are complex. The convergence rate of a linear dynamical system is given by the spectral radius, which is the magnitude of the largest eigenvalue $|\sigma|$.
+
+For complex roots $a \pm bi$, the magnitude squared is $|a + bi|^2 = a^2 + b^2$. Notice that the product of the roots is strictly the determinant of $R$:
+\begin{equation}
+    (a + bi)(a - bi) = a^2 + b^2 = \det(R) = \beta
+\end{equation}
+Therefore, the magnitude of the roots is exactly $\sqrt{\beta}$. 
+
+This means that in the oscillatory regime, \textit{the rate of convergence is completely independent of the learning rate $\alpha$ and the curvature $\lambda_i$}. It depends \textit{only} on the momentum parameter $\beta$. This allows momentum to enforce a uniform, accelerated convergence rate across all poorly conditioned dimensions simultaneously, breaking the condition number bottleneck.

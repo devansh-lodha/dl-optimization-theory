@@ -1,0 +1,56 @@
+\section{Limited-Memory BFGS and Stochastic Limitations}
+\label{sec:lbfgs}
+
+While the BFGS algorithm successfully achieves second-order convergence using only first-order gradients, it fundamentally requires maintaining and updating the dense $d \times d$ inverse Hessian approximation $B_t$. For modern deep learning models where $d$ exceeds tens of millions of parameters, allocating $O(d^2)$ memory is strictly impossible.
+
+Limited-Memory BFGS (L-BFGS) \cite{liu1989limited} resolves this by entirely abandoning the explicit matrix $B_t$. Instead of storing the full matrix, L-BFGS reconstructs the matrix-vector product $B_t \nabla f(w^{(t)})$ dynamically at every step using only a small, truncated history of the most recent parameter and gradient updates.
+
+\subsection{The Two-Loop Recursion}
+By unrolling the exact BFGS update equation, one can prove that the current inverse Hessian approximation $B_t$ is entirely defined by an initial guess $B_t^{(0)}$ and the sequence of historical parameter steps $s_k$ and gradient differences $y_k$. 
+
+L-BFGS introduces a memory budget $m$ (typically $5 \le m \le 20$). It stores only the $m$ most recent pairs $\{(s_i, y_i)\}_{i=t-m}^{t-1}$. To compute the optimal search direction $p_t = -B_t g_t$, the algorithm applies a mathematically exact procedure known as the \textbf{Two-Loop Recursion}.
+
+\begin{algorithm}[H]
+\caption{L-BFGS Two-Loop Recursion}
+\begin{algorithmic}[1]
+\Require Gradient $g_t = \nabla f(w^{(t)})$
+\Require History $\{(s_i, y_i)\}_{i=t-m}^{t-1}$
+\State $q \gets g_t$
+\For{$i = t-1$ down to $t-m$} \Comment{Backward Pass}
+    \State $\rho_i \gets \frac{1}{y_i^T s_i}$
+    \State $\alpha_i \gets \rho_i s_i^T q$
+    \State $q \gets q - \alpha_i y_i$
+\EndFor
+\State $\gamma_t \gets \frac{s_{t-1}^T y_{t-1}}{y_{t-1}^T y_{t-1}}$ \Comment{Initial Hessian Scaling}
+\State $r \gets \gamma_t q$
+\For{$i = t-m$ to $t-1$} \Comment{Forward Pass}
+    \State $\beta \gets \rho_i y_i^T r$
+    \State $r \gets r + s_i (\alpha_i - \beta)$
+\EndFor
+\State \Return $p_t = -r$
+\end{algorithmic}
+\end{algorithm}
+
+The scalar factor $\gamma_t$ serves as the initial Hessian approximation $B_t^{(0)} = \gamma_t I$, effectively estimating the underlying scale of the curvature before applying the $m$ rank-two updates. 
+
+\textbf{Computational Complexity:} Because the algorithm relies exclusively on sequential vector inner products, computing the optimal search direction requires exactly $O(md)$ operations and $O(md)$ memory. Since $m$ is a small constant, the time and space complexity scale linearly with respect to the parameter count, rendering the update step as computationally efficient as standard Gradient Descent.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{floats/lbfgs_memory.pdf}
+    \caption{L-BFGS convergence on a dense, highly correlated 100-dimensional quadratic objective ($\kappa = 1000$). Standard GD decays infinitely slowly. A memory budget of $m=1$ captures only scalar scaling, struggling against dense cross-correlations. A budget of $m=20$ maps out the high-dimensional correlated curvature flawlessly, achieving exponential second-order convergence without ever forming a $100 \times 100$ matrix.}
+    \label{fig:lbfgs_memory}
+\end{figure}
+
+\subsection{The Stochastic Limitation of Quasi-Newton Methods}
+Given its linear time complexity and massive second-order acceleration, L-BFGS is universally regarded as the optimal algorithm for deterministic, full-batch optimization. However, it is fundamentally incompatible with the training of modern deep neural networks via mini-batching. The reason lies strictly in the mathematical geometry of the Secant Condition.
+
+Recall the gradient difference vector:
+\begin{equation}
+    y_t = \nabla f(w^{(t+1)}) - \nabla f(w^{(t)})
+\end{equation}
+For $y_t$ to accurately measure the physical curvature of the loss surface, the two gradients must be evaluated on the \textit{exact same objective function}. 
+
+In Stochastic Gradient Descent (mini-batching), the objective function changes at every step because the sampled data batch changes. If $g_{t+1}$ is evaluated on Batch $A$ and $g_t$ is evaluated on Batch $B$, the difference $y_t$ is hopelessly corrupted by sampling variance. The secant condition is violated, the curvature estimate becomes physically meaningless, and the implicit inverse Hessian $B_t$ loses its positive definiteness, causing the algorithm's line search to fail or the optimizer to diverge entirely.
+
+Consequently, while Adam and RMSProp successfully dampen stochastic noise using diagonal variance accumulators, quasi-Newton methods remain strictly constrained to domains where gradients are fully deterministic or where noise is rigidly controlled via massive batch sizes.

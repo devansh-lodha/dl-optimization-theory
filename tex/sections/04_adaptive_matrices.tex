@@ -1,0 +1,60 @@
+\section{The Geometry of Adaptive Learning Rates}
+\label{sec:adaptive}
+
+While momentum operates by dampening oscillations via the first moment (the gradient), it fundamentally applies the same global step size $\alpha$ to all parameter coordinates. This poses a severe limitation when the objective geometry is non-uniform, particularly in two scenarios: sparse stochastic features and pathological deterministic curvature. Adaptive learning rate methods solve this by scaling the step size for each parameter individually based on the history of its gradients.
+
+\subsection{The Sparse Feature Problem and Adagrad}
+Consider a natural language processing model where $w_1$ corresponds to a ubiquitous feature and $w_2$ corresponds to a rare feature. The dense feature $w_1$ receives a noisy gradient at every step, while the sparse feature $w_2$ receives a gradient in only a small fraction of the iterations.
+
+If we apply standard SGD, we face an impossible tradeoff (Figure \ref{fig:sparse_adagrad}):
+\begin{itemize}
+    \item \textbf{Small global $\alpha$:} The dense feature $w_1$ safely averages out its noise and converges. However, the sparse feature $w_2$ receives only a handful of updates, each of which is far too small. It fails to converge.
+    \item \textbf{Large global $\alpha$:} The sparse feature $w_2$ makes meaningful progress when it finally receives an update. However, the high learning rate causes the dense, noisy updates of $w_1$ to exhibit high variance and instability.
+\end{itemize}
+
+To resolve this, Adagrad \cite{duchi2011adaptive} tracks the sum of the squares of past gradients for each parameter. Let $g_t = \nabla f(w^{(t)})$. We define a diagonal accumulator matrix $G_t \in \R^{d \times d}$:
+\begin{equation}
+    G_{t, ii} = \sum_{\tau=1}^t (g_{\tau, i})^2
+\end{equation}
+The Adagrad update rule divides the gradient by the $\ell_2$ norm of its history:
+\begin{equation}
+    w^{(t+1)} = w^{(t)} - \frac{\alpha}{\sqrt{G_t + \epsilon I}} \odot g_t
+\end{equation}
+
+For the dense feature $w_1$, $G_t$ accumulates rapidly, driving the effective learning rate $\alpha/\sqrt{G_{t,11}}$ toward zero. This automatically enforces the Robbins-Monro conditions, dampening stochastic noise. For the rare feature $w_2$, $G_t$ remains small. When $w_2$ receives an update, its effective learning rate remains large, allowing for a meaningful stride. Adagrad automatically adapts the optimization to the dataset's frequencies.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{floats/sparse_adagrad.pdf}
+    \caption{Optimization on stochastic sparse features. A small global SGD learning rate stabilizes the dense feature but fails to learn the sparse feature. A large SGD learning rate captures the sparse feature but induces high variance on the dense feature. Adagrad achieves simultaneous stability and rapid convergence by scaling both coordinates inversely to their update frequency.}
+    \label{fig:sparse_adagrad}
+\end{figure}
+
+\subsection{Dynamic Preconditioning and the Monotonicity Flaw}
+In addition to handling sparsity, the scaling term $G_t^{-1/2}$ acts mathematically as a \textit{dynamic preconditioner} on smooth deterministic loss surfaces. On a pathological quadratic bowl, directions with high curvature generate large gradients. Adagrad rapidly accumulates these into the denominator, aggressively shrinking the step size along the high-curvature axis. As shown in Figure \ref{fig:adaptive_lr}a, this dynamic preconditioning eliminates transverse zigzagging, collapsing the trajectory onto a direct diagonal path.
+
+Despite its success on sparse data and its geometric elegance, Adagrad has a fatal mathematical flaw for dense, non-convex deep learning models. Because $G_{t, ii}$ is a strictly accumulating sum of positive values, the denominator grows monotonically:
+\begin{equation}
+    \lim_{t \to \infty} \frac{\alpha}{\sqrt{G_t}} = 0
+\end{equation}
+If the optimizer must traverse a long, flat plateau after navigating a steep region, Adagrad's effective learning rate is permanently crushed by the steep initial gradients (Figure \ref{fig:adaptive_lr}b). It expends its learning rate budget prematurely and stalls before reaching the minimum.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{floats/adaptive_lr.pdf}
+    \caption{(a) Deterministic parameter trajectories on an elongated quadratic. Adagrad and RMSProp act as diagonal preconditioners, tracking identical, direct geometric paths. However, Adagrad stalls. (b) Adagrad's convergence curve flattens out entirely as its effective learning rate is crushed by infinite gradient accumulation, while RMSProp converges exponentially.}
+    \label{fig:adaptive_lr}
+\end{figure}
+
+\subsection{RMSProp and Terminal Stability}
+To resolve this, RMSProp \cite{tieleman2012rmsprop} modifies the accumulator from a strict sum to an Exponential Moving Average (EMA) with decay rate $\gamma$ (typically 0.99):
+\begin{equation}
+    v_t = \gamma v_{t-1} + (1 - \gamma) g_t^2
+\end{equation}
+\begin{equation}
+    w^{(t+1)} = w^{(t)} - \frac{\alpha}{\sqrt{v_t + \epsilon}} \odot g_t
+\end{equation}
+
+By replacing the monotonic accumulator with the uncentered variance estimator $v_t$, RMSProp continuously discounts historical gradients, maintaining a strictly non-vanishing learning rate.
+
+\textbf{The Mathematical Role of Epsilon ($\epsilon$):} In standard literature, $\epsilon$ is often introduced merely as a numerical stabilizer to prevent division by zero. However, in exact optimization, it dictates the terminal stability of the algorithm. As the optimizer converges, $g_t \to 0$ and $v_t \to 0$. Thus, the effective learning rate converges to exactly $\alpha/\epsilon$. If $\epsilon$ is excessively small, the terminal learning rate breaches the stability threshold ($2/\lambda_{max}$), causing divergence at the exact minimum. By explicitly tuning $\epsilon$, RMSProp takes normalized strides far from the optimum while seamlessly guaranteeing absolute stability upon convergence.

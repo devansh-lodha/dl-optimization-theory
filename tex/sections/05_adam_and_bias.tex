@@ -1,0 +1,58 @@
+\section{Adam and the Mathematics of Bias Correction}
+\label{sec:adam}
+
+Adaptive Moment Estimation (Adam) \cite{kingma2014adam} unifies the two distinct theoretical branches of first-order optimization. It fuses the accelerated trajectory of Polyak Momentum (tracking the first moment) with the dynamic preconditioning of RMSProp (tracking the second uncentered moment). 
+
+\subsection{The Adam Update Rules}
+Let $g_t = \nabla f(w^{(t)})$ be the stochastic gradient at step $t$. Adam maintains exponential moving averages (EMAs) of the gradient $m_t$ and the squared gradient $v_t$, governed by decay rates $\beta_1$ and $\beta_2$ respectively (typically $\beta_1 = 0.9$, $\beta_2 = 0.999$):
+\begin{align}
+    m_t &= \beta_1 m_{t-1} + (1 - \beta_1) g_t \\
+    v_t &= \beta_2 v_{t-1} + (1 - \beta_2) g_t^2
+\end{align}
+
+Because these accumulators are initialized at zero ($m_0 = 0$, $v_0 = 0$), they are heavily biased toward zero during the initial iterations. If left uncorrected, the step sizes during the first epoch of training would be pathologically distorted. To resolve this, Adam applies a time-dependent bias correction:
+\begin{equation}
+    \hat{m}_t = \frac{m_t}{1 - \beta_1^t}, \quad \hat{v}_t = \frac{v_t}{1 - \beta_2^t}
+\end{equation}
+The final parameter update applies diagonal preconditioning to the momentum vector:
+\begin{equation}
+    w^{(t+1)} = w^{(t)} - \frac{\alpha}{\sqrt{\hat{v}_t} + \epsilon} \odot \hat{m}_t
+\end{equation}
+
+\subsection{Rigorous Proof of Bias Correction}
+To understand exactly why the $1 - \beta^t$ terms are mathematically mandatory, we must derive the expected value of the raw estimator $m_t$. 
+
+By unrolling the recursive definition of $m_t$, we can express it strictly as a weighted sum of all past gradients:
+\begin{align}
+    m_t &= (1 - \beta_1) g_t + \beta_1 m_{t-1} \\
+        &= (1 - \beta_1) g_t + \beta_1 \left( (1 - \beta_1) g_{t-1} + \beta_1 m_{t-2} \right) \\
+        &= (1 - \beta_1) \sum_{i=1}^t \beta_1^{t-i} g_i
+\end{align}
+
+We want $m_t$ to be an unbiased estimator of the expected gradient. Assume the true gradient distribution is stationary in the local neighborhood, such that $\E[g_i] = \E[g]$ for all $i \le t$. We take the expectation of both sides:
+\begin{align}
+    \E[m_t] &= \E \left[ (1 - \beta_1) \sum_{i=1}^t \beta_1^{t-i} g_i \right] \\
+            &= (1 - \beta_1) \E[g] \sum_{i=1}^t \beta_1^{t-i}
+\end{align}
+
+The sum $\sum_{i=1}^t \beta_1^{t-i}$ is a finite geometric series: $\sum_{j=0}^{t-1} \beta_1^j = \frac{1 - \beta_1^t}{1 - \beta_1}$. Substituting this into the expectation yields:
+\begin{align}
+    \E[m_t] &= (1 - \beta_1) \E[g] \left( \frac{1 - \beta_1^t}{1 - \beta_1} \right) \\
+    \E[m_t] &= \E[g] \cdot (1 - \beta_1^t)
+\end{align}
+
+This proof rigorously isolates the initialization bias. The expected value of the raw accumulator $m_t$ is scaled by a factor of $(1 - \beta_1^t)$. When $t$ is small, $\beta_1^t \approx 1$, forcing the estimate artificially close to zero (Figure \ref{fig:adam_dynamics}a). As $t \to \infty$, $\beta_1^t \to 0$, and the estimator naturally becomes unbiased.
+
+By dividing $m_t$ by $(1 - \beta_1^t)$, we perfectly cancel this time-dependent dampening, guaranteeing that $\E[\hat{m}_t] = \E[g]$ exactly from $t=1$. The identical mathematical derivation applies to the second moment estimator $v_t$.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{floats/adam_dynamics.pdf}
+    \caption{(a) The rigorous effect of Bias Correction on a stochastic sequence with $\E[g]=1.0$. The raw EMA $m_t$ starts heavily biased toward zero. The corrected estimator $\hat{m}_t$ tracks the true expected value flawlessly from step $t=1$. (b) Parameter trajectories. Adam fuses the trajectory smoothing of Momentum with the dynamic preconditioning of RMSProp, accelerating the descent along the preconditioned diagonal axis.}
+    \label{fig:adam_dynamics}
+\end{figure}
+
+\subsection{AdamW and the Weight Decay Fallacy}
+Standard Adam applies $\ell_2$ regularization by adding $\frac{\lambda}{2}\|w\|^2$ to the objective function, which modifies the gradient to $g_t = \nabla f(w) + \lambda w$. However, because Adam scales the gradient by $\hat{v}_t^{-1/2}$, it also scales the regularization term. Parameters with high curvature receive heavily penalized regularization, while flat parameters are overly regularized. 
+
+This mathematical distortion means $\ell_2$ regularization is \textit{not} equivalent to weight decay in adaptive methods. AdamW \cite{loshchilov2017decoupled} corrects this by decoupling the decay entirely from the gradient step, applying the weight decay update $w^{(t+1)} = w^{(t)} - \eta \lambda w^{(t)}$ strictly after the Adam preconditioning step is complete.
